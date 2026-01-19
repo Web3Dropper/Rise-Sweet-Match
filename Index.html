@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sweet Match Puzzle</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&amp;family=Nunito:wght@600;700;800&amp;display=swap" rel="stylesheet">
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    
+    .game-font {
+      font-family: 'Fredoka One', cursive;
+    }
+    
+    .ui-font {
+      font-family: 'Nunito', sans-serif;
+    }
+    
+    .candy-cell {
+      transition: transform 0.15s ease-out, opacity 0.2s ease-out;
+      cursor: pointer;
+    }
+    
+    .candy-cell:hover {
+      transform: scale(1.1);
+    }
+    
+    .candy-cell.selected {
+      animation: pulse 0.5s ease-in-out infinite;
+      filter: brightness(1.2) drop-shadow(0 0 8px rgba(255,255,255,0.8));
+    }
+    
+    .candy-cell.matched {
+      animation: pop 0.3s ease-out forwards;
+    }
+    
+    .candy-cell.falling {
+      animation: fall 0.3s ease-in;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+    }
+    
+    @keyframes pop {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.5; }
+      100% { transform: scale(0); opacity: 0; }
+    }
+    
+    @keyframes fall {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(0); }
+    }
+    
+    @keyframes scoreFloat {
+      0% { transform: translateY(0) scale(1); opacity: 1; }
+      100% { transform: translateY(-50px) scale(1.5); opacity: 0; }
+    }
+    
+    .score-float {
+      animation: scoreFloat 0.8s ease-out forwards;
+      position: absolute;
+      pointer-events: none;
+      font-family: 'Fredoka One', cursive;
+      color: #FFD700;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    
+    .game-board {
+      background: linear-gradient(145deg, #1a0a2e 0%, #2d1b4e 50%, #1a0a2e 100%);
+      border: 4px solid #8b5cf6;
+      box-shadow: 0 0 30px rgba(139, 92, 246, 0.5), inset 0 0 60px rgba(0,0,0,0.5);
+    }
+    
+    .cell-bg {
+      background: linear-gradient(145deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+      border-radius: 8px;
+    }
+    
+    .candy-img {
+      width: 85%;
+      height: 85%;
+      object-fit: contain;
+      filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.4));
+    }
+    
+    .btn-play {
+      background: linear-gradient(145deg, #22c55e 0%, #16a34a 100%);
+      box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+      transition: all 0.2s ease;
+    }
+    
+    .btn-play:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(34, 197, 94, 0.6);
+    }
+    
+    .moves-badge {
+      background: linear-gradient(145deg, #f59e0b 0%, #d97706 100%);
+    }
+    
+    .score-badge {
+      background: linear-gradient(145deg, #8b5cf6 0%, #7c3aed 100%);
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full bg-gradient-to-br from-purple-900 via-indigo-900 to-purple-800 overflow-auto">
+  <div id="app" class="min-h-full w-full flex flex-col items-center justify-center p-4"><!-- Header -->
+   <div class="text-center mb-4">
+    <h1 id="game-title" class="game-font text-4xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-yellow-300 to-pink-400 drop-shadow-lg">Sweet Match</h1>
+   </div><!-- Stats Bar -->
+   <div class="flex gap-4 mb-4">
+    <div class="moves-badge px-6 py-2 rounded-full text-white ui-font font-bold shadow-lg"><span class="text-sm opacity-80">Moves</span> <span id="moves" class="ml-2 text-xl">30</span>
+    </div>
+    <div class="score-badge px-6 py-2 rounded-full text-white ui-font font-bold shadow-lg"><span class="text-sm opacity-80">Score</span> <span id="score" class="ml-2 text-xl">0</span>
+    </div>
+   </div><!-- Game Board -->
+   <div id="game-board" class="game-board rounded-2xl p-2 relative">
+    <div id="board-grid" class="grid gap-1" style="grid-template-columns: repeat(8, 1fr);"><!-- Cells will be generated here -->
+    </div>
+   </div><!-- Game Over Overlay -->
+   <div id="game-over" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="bg-gradient-to-br from-purple-800 to-indigo-900 p-8 rounded-3xl text-center border-4 border-purple-400 shadow-2xl max-w-sm mx-4">
+     <h2 class="game-font text-3xl text-yellow-300 mb-4">Game Over!</h2>
+     <p class="ui-font text-white text-lg mb-2">Final Score</p>
+     <p id="final-score" class="game-font text-5xl text-pink-400 mb-6">0</p><button id="play-again" class="btn-play px-8 py-3 rounded-full text-white game-font text-xl"> Play Again </button>
+    </div>
+   </div><!-- New Game Button --> <button id="new-game" class="btn-play mt-4 px-6 py-2 rounded-full text-white ui-font font-bold text-lg"> New Game </button>
+  </div>
+  <script>
+    // Candy images
+    const CANDY_IMAGES = [
+      'https://i.ibb.co/pBxmJdGt/image.png',
+      'https://i.ibb.co/1G4L3tww/image.png',
+      'https://i.ibb.co/VYLpZD9d/image.png',
+      'https://i.ibb.co/sJyGY97y/image.png',
+      'https://i.ibb.co/bjvp0Sp2/image.png',
+      'https://i.ibb.co/8nLPnbJS/image.png'
+    ];
+    
+    const BOARD_SIZE = 8;
+    const INITIAL_MOVES = 30;
+    
+    let board = [];
+    let selectedCell = null;
+    let score = 0;
+    let moves = INITIAL_MOVES;
+    let isProcessing = false;
+    
+    // Initialize game
+    function initGame() {
+      board = [];
+      selectedCell = null;
+      score = 0;
+      moves = INITIAL_MOVES;
+      isProcessing = false;
+      
+      document.getElementById('game-over').classList.add('hidden');
+      updateUI();
+      
+      // Create initial board without matches
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        board[row] = [];
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          board[row][col] = getRandomCandyWithoutMatch(row, col);
+        }
+      }
+      
+      renderBoard();
+    }
+    
+    // Get random candy that doesn't create a match
+    function getRandomCandyWithoutMatch(row, col) {
+      let candy;
+      let attempts = 0;
+      do {
+        candy = Math.floor(Math.random() * CANDY_IMAGES.length);
+        attempts++;
+      } while (attempts < 50 && wouldCreateMatch(row, col, candy));
+      return candy;
+    }
+    
+    // Check if placing candy would create a match
+    function wouldCreateMatch(row, col, candy) {
+      // Check horizontal
+      if (col >= 2 && board[row][col-1] === candy && board[row][col-2] === candy) {
+        return true;
+      }
+      // Check vertical
+      if (row >= 2 && board[row-1] && board[row-2] && 
+          board[row-1][col] === candy && board[row-2][col] === candy) {
+        return true;
+      }
+      return false;
+    }
+    
+    // Render the board
+    function renderBoard() {
+      const grid = document.getElementById('board-grid');
+      grid.innerHTML = '';
+      
+      const cellSize = window.innerWidth < 400 ? 40 : 50;
+      grid.style.gridTemplateColumns = `repeat(${BOARD_SIZE}, ${cellSize}px)`;
+      
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell-bg flex items-center justify-center candy-cell';
+          cell.style.width = `${cellSize}px`;
+          cell.style.height = `${cellSize}px`;
+          cell.dataset.row = row;
+          cell.dataset.col = col;
+          
+          if (board[row][col] !== null) {
+            const img = document.createElement('img');
+            img.src = CANDY_IMAGES[board[row][col]];
+            img.className = 'candy-img';
+            img.alt = 'candy';
+            img.loading = 'lazy';
+            img.onerror = function() { 
+              this.src = ''; 
+              this.alt = '🍬';
+              this.style.fontSize = '24px';
+            };
+            cell.appendChild(img);
+          }
+          
+          cell.addEventListener('click', () => handleCellClick(row, col));
+          grid.appendChild(cell);
+        }
+      }
+    }
+    
+    // Handle cell click
+    function handleCellClick(row, col) {
+      if (isProcessing || moves <= 0) return;
+      
+      const cell = getCellElement(row, col);
+      
+      if (selectedCell === null) {
+        selectedCell = { row, col };
+        cell.classList.add('selected');
+      } else {
+        const prevCell = getCellElement(selectedCell.row, selectedCell.col);
+        prevCell.classList.remove('selected');
+        
+        // Check if adjacent
+        const rowDiff = Math.abs(selectedCell.row - row);
+        const colDiff = Math.abs(selectedCell.col - col);
+        
+        if ((rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1)) {
+          // Swap candies
+          swapCandies(selectedCell.row, selectedCell.col, row, col);
+        }
+        
+        selectedCell = null;
+      }
+    }
+    
+    // Get cell element
+    function getCellElement(row, col) {
+      return document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+    }
+    
+    // Swap candies
+    async function swapCandies(row1, col1, row2, col2) {
+      isProcessing = true;
+      
+      // Perform swap
+      const temp = board[row1][col1];
+      board[row1][col1] = board[row2][col2];
+      board[row2][col2] = temp;
+      
+      renderBoard();
+      
+      // Check for matches
+      const matches = findMatches();
+      
+      if (matches.length > 0) {
+        moves--;
+        updateUI();
+        await processMatches(matches);
+      } else {
+        // Swap back
+        board[row2][col2] = board[row1][col1];
+        board[row1][col1] = temp;
+        renderBoard();
+      }
+      
+      isProcessing = false;
+      
+      // Check game over
+      if (moves <= 0) {
+        showGameOver();
+      }
+    }
+    
+    // Find all matches
+    function findMatches() {
+      const matches = new Set();
+      
+      // Check horizontal matches
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE - 2; col++) {
+          if (board[row][col] !== null &&
+              board[row][col] === board[row][col+1] &&
+              board[row][col] === board[row][col+2]) {
+            matches.add(`${row},${col}`);
+            matches.add(`${row},${col+1}`);
+            matches.add(`${row},${col+2}`);
+            
+            // Check for longer matches
+            let extra = 3;
+            while (col + extra < BOARD_SIZE && board[row][col] === board[row][col+extra]) {
+              matches.add(`${row},${col+extra}`);
+              extra++;
+            }
+          }
+        }
+      }
+      
+      // Check vertical matches
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        for (let row = 0; row < BOARD_SIZE - 2; row++) {
+          if (board[row][col] !== null &&
+              board[row][col] === board[row+1][col] &&
+              board[row][col] === board[row+2][col]) {
+            matches.add(`${row},${col}`);
+            matches.add(`${row+1},${col}`);
+            matches.add(`${row+2},${col}`);
+            
+            // Check for longer matches
+            let extra = 3;
+            while (row + extra < BOARD_SIZE && board[row][col] === board[row+extra][col]) {
+              matches.add(`${row+extra},${col}`);
+              extra++;
+            }
+          }
+        }
+      }
+      
+      return Array.from(matches).map(s => {
+        const [r, c] = s.split(',').map(Number);
+        return { row: r, col: c };
+      });
+    }
+    
+    // Process matches
+    async function processMatches(matches) {
+      // Animate matched cells
+      matches.forEach(({ row, col }) => {
+        const cell = getCellElement(row, col);
+        if (cell) cell.classList.add('matched');
+      });
+      
+      // Add score
+      const matchScore = matches.length * 10;
+      score += matchScore;
+      
+      // Show floating score
+      showFloatingScore(matches[0], matchScore);
+      
+      await sleep(300);
+      
+      // Remove matched candies
+      matches.forEach(({ row, col }) => {
+        board[row][col] = null;
+      });
+      
+      renderBoard();
+      updateUI();
+      
+      // Drop candies
+      await dropCandies();
+      
+      // Fill empty spaces
+      await fillEmptySpaces();
+      
+      // Check for new matches
+      const newMatches = findMatches();
+      if (newMatches.length > 0) {
+        await processMatches(newMatches);
+      }
+    }
+    
+    // Show floating score
+    function showFloatingScore(pos, points) {
+      const boardEl = document.getElementById('game-board');
+      const float = document.createElement('div');
+      float.className = 'score-float text-2xl';
+      float.textContent = `+${points}`;
+      
+      const cellSize = window.innerWidth < 400 ? 40 : 50;
+      float.style.left = `${pos.col * (cellSize + 4) + 20}px`;
+      float.style.top = `${pos.row * (cellSize + 4)}px`;
+      
+      boardEl.appendChild(float);
+      setTimeout(() => float.remove(), 800);
+    }
+    
+    // Drop candies
+    async function dropCandies() {
+      let dropped = false;
+      
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        for (let row = BOARD_SIZE - 1; row >= 0; row--) {
+          if (board[row][col] === null) {
+            // Find candy above
+            for (let above = row - 1; above >= 0; above--) {
+              if (board[above][col] !== null) {
+                board[row][col] = board[above][col];
+                board[above][col] = null;
+                dropped = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      if (dropped) {
+        renderBoard();
+        await sleep(200);
+      }
+    }
+    
+    // Fill empty spaces
+    async function fillEmptySpaces() {
+      let filled = false;
+      
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        for (let row = 0; row < BOARD_SIZE; row++) {
+          if (board[row][col] === null) {
+            board[row][col] = Math.floor(Math.random() * CANDY_IMAGES.length);
+            filled = true;
+          }
+        }
+      }
+      
+      if (filled) {
+        renderBoard();
+        await sleep(200);
+      }
+    }
+    
+    // Update UI
+    function updateUI() {
+      document.getElementById('moves').textContent = moves;
+      document.getElementById('score').textContent = score;
+    }
+    
+    // Show game over
+    function showGameOver() {
+      document.getElementById('final-score').textContent = score;
+      document.getElementById('game-over').classList.remove('hidden');
+    }
+    
+    // Sleep helper
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    // Event listeners
+    document.getElementById('new-game').addEventListener('click', initGame);
+    document.getElementById('play-again').addEventListener('click', initGame);
+    
+    // Config and SDK setup
+    const defaultConfig = {
+      game_title: 'Sweet Match',
+      primary_color: '#8b5cf6',
+      secondary_color: '#1a0a2e',
+      accent_color: '#22c55e',
+      text_color: '#ffffff',
+      highlight_color: '#f59e0b'
+    };
+    
+    let config = { ...defaultConfig };
+    
+    async function onConfigChange(newConfig) {
+      config = { ...defaultConfig, ...newConfig };
+      
+      // Update title
+      document.getElementById('game-title').textContent = config.game_title || defaultConfig.game_title;
+    }
+    
+    function mapToCapabilities(config) {
+      return {
+        recolorables: [
+          {
+            get: () => config.secondary_color || defaultConfig.secondary_color,
+            set: (value) => { config.secondary_color = value; window.elementSdk.setConfig({ secondary_color: value }); }
+          },
+          {
+            get: () => config.primary_color || defaultConfig.primary_color,
+            set: (value) => { config.primary_color = value; window.elementSdk.setConfig({ primary_color: value }); }
+          },
+          {
+            get: () => config.text_color || defaultConfig.text_color,
+            set: (value) => { config.text_color = value; window.elementSdk.setConfig({ text_color: value }); }
+          },
+          {
+            get: () => config.accent_color || defaultConfig.accent_color,
+            set: (value) => { config.accent_color = value; window.elementSdk.setConfig({ accent_color: value }); }
+          },
+          {
+            get: () => config.highlight_color || defaultConfig.highlight_color,
+            set: (value) => { config.highlight_color = value; window.elementSdk.setConfig({ highlight_color: value }); }
+          }
+        ],
+        borderables: [],
+        fontEditable: undefined,
+        fontSizeable: undefined
+      };
+    }
+    
+    function mapToEditPanelValues(config) {
+      return new Map([
+        ['game_title', config.game_title || defaultConfig.game_title]
+      ]);
+    }
+    
+    // Initialize SDK
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange,
+        mapToCapabilities,
+        mapToEditPanelValues
+      });
+    }
+    
+    // Start game
+    initGame();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9c0389f9a6531f68',t:'MTc2ODc5NjQyMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
+
+
